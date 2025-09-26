@@ -59,7 +59,7 @@ python 1_cooc_matrix/run_cooc.py llama \
 
 ## SLURM Script Example: `run_cooc.sh`
 
-The file `run_cooc.sh` is an example of a batch script for the **SLURM Workload Manager**, which is commonly used on High-Performance Computing (HPC) clusters to schedule jobs.
+The file `run_cooc.sh` is an example of a batch script for the **SLURM Workload Manager**, which is commonly used on HPC clusters to schedule jobs.
 
 ### Key Features of the Script:
 
