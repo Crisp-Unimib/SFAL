@@ -2,7 +2,6 @@
 Counts the co-occurrences of SAE features across some corpus.
 """
 import os
-# os.environ['HF_HOME'] = '/om2/user/ericjm/.cache/huggingface'  
 import argparse
 import re
 import time
