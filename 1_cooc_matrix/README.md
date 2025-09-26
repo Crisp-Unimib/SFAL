@@ -69,5 +69,3 @@ The file `run_cooc.sh` is an example of a batch script for the **SLURM Workload 
 - **Execution**: It calls the main `run_cooc.py` script with the appropriate parameters for running the `llama` configuration on a specific layer.
 
 This script is tailored for a specific cluster environment and its directives (e.g., `#SBATCH --account=...`, `#SBATCH --partition=...`) would need to be adapted for your own HPC setup.
-
-```
