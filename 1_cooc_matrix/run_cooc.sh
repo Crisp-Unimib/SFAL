@@ -82,14 +82,15 @@ echo "INFO: Sleep finished. Proceeding with execution."
 
 
 # --- EXECUTION ---
-echo "INFO: Starting the Python script..."
-python -u cooc_matrix.py \
+python -u run_cooc.py llama \
+    --model meta-llama/Llama-3.1-8B \
     --save_dir cooc_histograms/ \
     --n_docs 50000 \
     --layers "$LAYER_TO_PROCESS" \
     --k 256 \
     --sae_type res \
     --top_k 50
+
 
 echo "===================================================="
 echo "          SLURM JOB FINISHED"
