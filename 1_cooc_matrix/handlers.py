@@ -93,12 +93,6 @@ class GemmaHandler(CoocHandler):
                 model_size = self.args.model.split('-')[-2]
 
             repo_id = f"google/gemma-scope-{model_size}-{repo_suffix}"
-            print(f"[DEBUG] SAE Type: {sae_type}")
-            print(f"[DEBUG] model_name: {model_name}")
-            print(f"[DEBUG] parts: {parts}")
-            print(f"[DEBUG] model_size: {model_size}")
-            print(f"[DEBUG] repo_id: {repo_id}")
-            
             try:
                 available_saes = [f for f in list_repo_files(repo_id) if f.endswith('params.npz')]
             except Exception as e:
@@ -113,7 +107,7 @@ class GemmaHandler(CoocHandler):
                     # The full SAE name includes the directory, which we'll use for bookkeeping
                     sae_full_name = f"{sae_dir_name}/params.npz"
 
-                    path_to_params = hf_hub_download(repo_id=repo_id, filename=sae_full_name)
+                    path_to_params = hf_hub_download(repo_id=repo_id, filename=sae_full_name, force_download=True)
                     
                     params = np.load(path_to_params)
                     pt_params = {k: torch.from_numpy(v).to(self.device) for k, v in params.items()}
