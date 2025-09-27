@@ -29,12 +29,7 @@ To run with a Gemma model, use the `gemma` sub-command.
 
 **Example:**
 ```bash
-python 1_cooc_matrix/run_cooc.py gemma \
-    --model google/gemma-2-2b \
-    --layers 0 1 2 \
-    --sae_features 16k \
-    --target_l0 50 \
-    --n_docs 10000
+python 1_cooc_matrix/run_cooc.py gemma --model google/gemma-2-2b --layers 0 --n_docs 100 --save_dir ./cooc --k 256 --sae_features 16k --target_l0 105
 ```
 
 #### Llama (`llama`)
