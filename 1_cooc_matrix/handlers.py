@@ -82,7 +82,17 @@ class GemmaHandler(CoocHandler):
 
         for sae_type in sae_types:
             repo_suffix = f"pt-{sae_type}"
-            model_size = self.args.model.split('-')[-2]
+            
+            model_name = self.args.model.split("/")[-1]
+            parts = model_name.split('-')
+            if len(parts) == 3 and parts[0] == 'gemma': # gemma-2-2b case
+                model_size = parts[1]
+            elif len(parts) == 2 and parts[0] == 'gemma': # gemma-2b case
+                model_size = parts[1]
+            else:
+                print(f"Warning: Could not reliably determine model size from {self.args.model}. Using fallback logic.")
+                model_size = self.args.model.split('-')[-2]
+
             repo_id = f"google/gemma-scope-{model_size}-{repo_suffix}"
             
             try:
