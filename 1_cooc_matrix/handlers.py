@@ -82,17 +82,11 @@ class GemmaHandler(CoocHandler):
         for sae_type in self.args.sae_type:
             repo_suffix = f"pt-{sae_type}"
             
-            model_name = self.args.model.split("/")[-1]
-            parts = model_name.split('-')
-            if len(parts) == 3 and parts[0] == 'gemma': # gemma-2-2b case
-                model_size = parts[1]
-            elif len(parts) == 2 and parts[0] == 'gemma': # gemma-2b case
-                model_size = parts[1]
-            else:
-                print(f"Warning: Could not reliably determine model size from {self.args.model}. Using fallback logic.")
-                model_size = self.args.model.split('-')[-2]
-
-            repo_id = f"google/gemma-scope-{model_size}-{repo_suffix}"
+            # The SAE repo size identifier (e.g., '2b', '7b') is the last part of the model name.
+            model_name_parts = self.args.model.split("/")[-1].split('-')
+            model_size_for_sae = model_name_parts[-1]
+            repo_id = f"google/gemma-scope-{model_size_for_sae}-{repo_suffix}"
+            
             try:
                 available_saes = [f for f in list_repo_files(repo_id) if f.endswith('params.npz')]
             except Exception as e:
@@ -107,7 +101,7 @@ class GemmaHandler(CoocHandler):
                     # The full SAE name includes the directory, which we'll use for bookkeeping
                     sae_full_name = f"{sae_dir_name}/params.npz"
 
-                    path_to_params = hf_hub_download(repo_id=repo_id, filename=sae_full_name, force_download=True)
+                    path_to_params = hf_hub_download(repo_id=repo_id, filename=sae_full_name)
                     
                     params = np.load(path_to_params)
                     pt_params = {k: torch.from_numpy(v).to(self.device) for k, v in params.items()}
