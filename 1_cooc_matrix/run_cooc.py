@@ -75,7 +75,6 @@ def main():
     dataset_kwargs = {
         "streaming": handler.dataset_is_streaming,
         "split": "train",
-        "trust_remote_code": True,
     }
     dataset_id = handler.dataset_id
     
