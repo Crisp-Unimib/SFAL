@@ -59,6 +59,10 @@ class GemmaHandler(CoocHandler):
     """Handler for Gemma models and JumpReLUSAEs."""
 
     def load_model(self):
+        print("Loading Gemma model...")
+        tokenizer = AutoTokenizer.from_pretrained(
+            self.args.model, trust_remote_code=True
+        )
         model = HookedTransformer.from_pretrained_no_processing(
             self.args.model,
             tokenizer=tokenizer,
