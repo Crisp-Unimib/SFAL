@@ -76,11 +76,10 @@ class GemmaHandler(CoocHandler):
 
     def load_saes(self):
         print("Loading Gemma SAEs...")
-        sae_types = ["res", "mlp", "att"]
-        saes = {sae_type: [] for sae_type in sae_types}
-        sae_names = {sae_type: [] for sae_type in sae_types}
+        saes = {sae_type: [] for sae_type in self.args.sae_type}
+        sae_names = {sae_type: [] for sae_type in self.args.sae_type}
 
-        for sae_type in sae_types:
+        for sae_type in self.args.sae_type:
             repo_suffix = f"pt-{sae_type}"
             
             model_name = self.args.model.split("/")[-1]

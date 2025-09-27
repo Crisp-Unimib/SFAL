@@ -33,6 +33,7 @@ def main():
     parser_gemma = subparsers.add_parser("gemma", parents=[parent_parser], help="Run for Gemma models")
     parser_gemma.add_argument("--sae_features", type=str, required=True, help="Number of features in SAE (e.g., '16k').")
     parser_gemma.add_argument('--target_l0', type=int, required=True, help='The target l0 to use when selecting SAEs.')
+    parser_gemma.add_argument("--sae_type", nargs='+', default=["res"], choices=["res", "mlp", "att"], help="The type of SAEs to process. Default: [\"res\"]")
 
     # --- Llama Subparser ---
     parser_llama = subparsers.add_parser("llama", parents=[parent_parser], help="Run for Llama models")
