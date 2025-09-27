@@ -55,3 +55,20 @@ python 1_cooc_matrix/run_cooc.py llama \
     --n_docs 50000
 ```
 
+<<<<<<< HEAD
+=======
+---
+
+## SLURM Script Example: `run_cooc.sh`
+
+The file `run_cooc.sh` is an example of a batch script for the **SLURM Workload Manager**, which is commonly used on HPC clusters to schedule jobs.
+
+### Key Features of the Script:
+
+- **Environment Setup**: It loads the necessary modules and sets environment variables for offline execution (`HF_HUB_OFFLINE=1`).
+- **Job Array**: It uses a SLURM job array (`--array=8,17,31`) to submit multiple jobs at once. Each job processes a different layer, which is passed to the python script via the `$SLURM_ARRAY_TASK_ID` variable.
+- **Staggered Start**: It includes a delay mechanism to prevent multiple jobs from accessing the file system simultaneously at the very start, which can cause issues on some shared file systems.
+- **Execution**: It calls the main `run_cooc.py` script with the appropriate parameters for running the `llama` configuration on a specific layer.
+
+This script is tailored for a specific cluster environment and its directives (e.g., `#SBATCH --account=...`, `#SBATCH --partition=...`) would need to be adapted for your own HPC setup.
+>>>>>>> 7f225160cf90e3f684dfd84eba137baa1d6deae5
