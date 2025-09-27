@@ -26,6 +26,7 @@ To run with a Gemma model, use the `gemma` sub-command.
 **Required Arguments:**
 - `--sae_features`: The number of features in the SAE (e.g., `16k`, `32k`).
 - `--target_l0`: The target L0 norm to use when selecting the best SAE.
+- `--sae_type`: The type of SAEs to process (`res`, `mlp`, `att`). Defaults to `res`.
 
 **Example:**
 ```bash
