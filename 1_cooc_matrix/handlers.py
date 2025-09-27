@@ -93,6 +93,11 @@ class GemmaHandler(CoocHandler):
                 model_size = self.args.model.split('-')[-2]
 
             repo_id = f"google/gemma-scope-{model_size}-{repo_suffix}"
+            print(f"[DEBUG] SAE Type: {sae_type}")
+            print(f"[DEBUG] model_name: {model_name}")
+            print(f"[DEBUG] parts: {parts}")
+            print(f"[DEBUG] model_size: {model_size}")
+            print(f"[DEBUG] repo_id: {repo_id}")
             
             try:
                 available_saes = [f for f in list_repo_files(repo_id) if f.endswith('params.npz')]
