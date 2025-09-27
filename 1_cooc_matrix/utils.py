@@ -2,7 +2,7 @@ import os
 import re
 import numpy as np
 import torch
-from glob import glob
+
 
 def update_cooc_histogram(binary_acts, histogram, n_chunks, k):
     """
@@ -75,24 +75,4 @@ def select_sae_name(sae_names, layer_number, layer_token_suffix="R"):
 
     return matching_files[0]
 
-def get_local_repo_path(repo_id, repo_type="model"):
-    """
-    Constructs the local cache path for a Hugging Face repo.
-    This helps find the files without making a network call.
-    (Used for Llama script in offline mode)
-    """
-    if repo_type == "dataset":
-        folder_name = "datasets--" + repo_id.replace("/", "--")
-    else:
-        folder_name = "models--" + repo_id.replace("/", "--")
-    
-    cache_dir = os.environ.get("HF_HOME", os.path.join(os.path.expanduser("~"), ".cache", "huggingface"))
-    
-    repo_path = os.path.join(cache_dir, "hub", folder_name)
-    print(f"DEBUG: Constructed local repo path: {repo_path}")
-    if not os.path.exists(repo_path):
-            raise FileNotFoundError(
-                f"Local cache for repo '{repo_id}' not found at '{repo_path}'. "
-                "Please run the `huggingface-cli download` commands on a login node first."
-            )
-    return repo_path
+

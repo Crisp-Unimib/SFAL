@@ -8,10 +8,7 @@ from tqdm.auto import tqdm
 
 # Local imports
 from handlers import GemmaHandler, LlamaHandler
-from utils import update_cooc_histogram, get_local_repo_path
-import datasets.config
-import datasets.utils.file_utils
-from glob import glob
+from utils import update_cooc_histogram
 
 # A dictionary to map model families to their handlers
 HANDLER_MAP = {
@@ -74,33 +71,15 @@ def main():
         print(f"\t{name}")
 
     # --- Load Dataset ---
-    print("Loading dataset (offline)...")
+    print("Loading dataset...")
     dataset_kwargs = {
         "streaming": handler.dataset_is_streaming,
         "split": "train",
         "trust_remote_code": True,
-        "download_mode": "reuse_cache_if_exists",
-        "verification_mode": "no_checks",
     }
     dataset_id = handler.dataset_id
     
-    # Set up offline mode for datasets
-    datasets.config.HF_DATASETS_OFFLINE = True
-    os.environ["HF_DATASETS_OFFLINE"] = "1"
-    datasets.utils.file_utils.is_offline_mode = lambda: True
-
-    # Find local dataset path
-    try:
-        local_dataset_path = get_local_repo_path(dataset_id, repo_type="dataset")
-        snapshot_dir = glob(os.path.join(local_dataset_path, 'snapshots', '*'))[0]
-        dataset_id_or_path = snapshot_dir # Use local path
-        print(f"Found local dataset at: {dataset_id_or_path}")
-    except (FileNotFoundError, IndexError) as e:
-        print(f"FATAL: Could not find local dataset for '{dataset_id}'. Please ensure it is downloaded.")
-        print(f"Error: {e}")
-        return # Exit
-
-    dataset = datasets.load_dataset(dataset_id_or_path, **dataset_kwargs)
+    dataset = datasets.load_dataset(dataset_id, **dataset_kwargs)
 
     # --- Main Processing Loop ---
     loop_t0 = time.time()

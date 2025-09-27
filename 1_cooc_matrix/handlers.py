@@ -1,7 +1,6 @@
 import os
 import json
 from abc import ABC, abstractmethod
-from glob import glob
 
 import numpy as np
 import torch
@@ -12,7 +11,7 @@ from transformers import AutoTokenizer
 
 # Imports from our new modules
 from sae_models import JumpReLUSAE, TopKSAE
-from utils import closest_l0_name, get_local_repo_path, select_sae_name
+from utils import closest_l0_name, select_sae_name
 
 
 class CoocHandler(ABC):
@@ -57,12 +56,12 @@ class CoocHandler(ABC):
 
 
 class GemmaHandler(CoocHandler):
-    """Handler for Gemma models and JumpReLUSAEs (Offline)."""
+    """Handler for Gemma models and JumpReLUSAEs."""
 
     def load_model(self):
-        print("Loading Gemma model (offline)...")
+        print("Loading Gemma model...")
         tokenizer = AutoTokenizer.from_pretrained(
-            self.args.model, local_files_only=True, trust_remote_code=True
+            self.args.model, trust_remote_code=True
         )
         model = HookedTransformer.from_pretrained_no_processing(
             self.args.model,
@@ -71,13 +70,12 @@ class GemmaHandler(CoocHandler):
             fold_ln=True,
             center_writing_weights=False,
             center_unembed=False,
-            local_files_only=True,
         )
         model.to(self.device)
         return model
 
     def load_saes(self):
-        print("Loading Gemma SAEs (offline)...")
+        print("Loading Gemma SAEs...")
         sae_types = ["res", "mlp", "att"]
         saes = {sae_type: [] for sae_type in sae_types}
         sae_names = {sae_type: [] for sae_type in sae_types}
@@ -88,12 +86,9 @@ class GemmaHandler(CoocHandler):
             repo_id = f"google/gemma-scope-{model_size}-{repo_suffix}"
             
             try:
-                local_repo_path = get_local_repo_path(repo_id)
-                snapshot_dir = glob(os.path.join(local_repo_path, 'snapshots', '*'))[0]
-                search_pattern = os.path.join(snapshot_dir, '**', 'params.npz')
-                available_saes = [os.path.relpath(p, snapshot_dir) for p in glob(search_pattern, recursive=True)]
+                available_saes = [f for f in list_repo_files(repo_id) if f.endswith('params.npz')]
             except Exception as e:
-                print(f"Could not find local files for {repo_id}. Skipping {sae_type} SAEs. Error: {e}")
+                print(f"Could not list files for {repo_id}. Skipping {sae_type} SAEs. Error: {e}")
                 continue
 
             for layeri in self.args.layers:
@@ -104,7 +99,7 @@ class GemmaHandler(CoocHandler):
                     # The full SAE name includes the directory, which we'll use for bookkeeping
                     sae_full_name = f"{sae_dir_name}/params.npz"
 
-                    path_to_params = os.path.join(snapshot_dir, sae_full_name)
+                    path_to_params = hf_hub_download(repo_id=repo_id, filename=sae_full_name)
                     
                     params = np.load(path_to_params)
                     pt_params = {k: torch.from_numpy(v).to(self.device) for k, v in params.items()}
@@ -151,12 +146,12 @@ class GemmaHandler(CoocHandler):
 
 
 class LlamaHandler(CoocHandler):
-    """Handler for Llama models and TopKSAEs in an offline environment."""
+    """Handler for Llama models and TopKSAEs."""
 
     def load_model(self):
-        print("Loading Llama model (offline)...")
+        print("Loading Llama model...")
         tokenizer = AutoTokenizer.from_pretrained(
-            self.args.model, local_files_only=True, trust_remote_code=True
+            self.args.model, trust_remote_code=True
         )
         model = HookedTransformer.from_pretrained_no_processing(
             self.args.model,
@@ -165,13 +160,12 @@ class LlamaHandler(CoocHandler):
             fold_ln=True,
             center_writing_weights=False,
             center_unembed=False,
-            local_files_only=True,
         )
         model.to(self.device)
         return model
 
     def load_saes(self):
-        print("Loading Llama SAEs (offline)...")
+        print("Loading Llama SAEs...")
         sae_types_map = {
             "res": ("fnlp/Llama3_1-8B-Base-LXR-8x", "R"),
             "mlp": ("fnlp/Llama3_1-8B-Base-LXM-8x", "M"),
@@ -185,17 +179,19 @@ class LlamaHandler(CoocHandler):
                 continue
             
             repo_id, suffix = sae_types_map[sae_type]
-            local_repo_path = get_local_repo_path(repo_id)
-            snapshot_dir = glob(os.path.join(local_repo_path, 'snapshots', '*'))[0]
-            search_pattern = os.path.join(snapshot_dir, '**', 'final.safetensors')
-            available_saes = [os.path.relpath(p, snapshot_dir) for p in glob(search_pattern, recursive=True)]
+            try:
+                available_saes = [f for f in list_repo_files(repo_id) if f.endswith('final.safetensors')]
+            except Exception as e:
+                print(f"Could not list files for {repo_id}. Skipping {sae_type} SAEs. Error: {e}")
+                continue
 
             for layeri in self.args.layers:
                 try:
                     sae_name = select_sae_name(available_saes, layeri, layer_token_suffix=suffix)
                     sae_base_dir = os.path.dirname(os.path.dirname(sae_name))
-                    hyperparams_path = os.path.join(snapshot_dir, sae_base_dir, 'hyperparams.json')
-                    path_to_params = os.path.join(snapshot_dir, sae_name)
+                    
+                    hyperparams_path = hf_hub_download(repo_id=repo_id, filename=os.path.join(sae_base_dir, 'hyperparams.json'))
+                    path_to_params = hf_hub_download(repo_id=repo_id, filename=sae_name)
 
                     with open(hyperparams_path) as f:
                         hyperparams = json.load(f)
