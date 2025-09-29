@@ -37,7 +37,7 @@ def main():
 
     # --- Llama Subparser ---
     parser_llama = subparsers.add_parser("llama", parents=[parent_parser], help="Run for Llama models")
-    parser_llama.add_argument("--sae_type", nargs='+', required=True, choices=["res", "mlp"], help="The type of SAEs to process (e.g., res mlp).")
+    parser_llama.add_argument("--sae_type", nargs='+', default=["res"], choices=["res", "mlp"], help="The type of SAEs to process. Default: [\"res\"]")
     parser_llama.add_argument("--top_k", type=int, required=True, help="The 'k' for TopK SAE activation.")
 
     args = parser.parse_args()
