@@ -6,3 +6,6 @@ tqdm
 transformer_lens
 transformers
 zstandard
+boto3
+python-dotenv
+sentence_transformers

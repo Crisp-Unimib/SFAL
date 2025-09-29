@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Constants 
 # import constants from the config file
-from config import MODEL_ID, SAE_ID, S3_BUCKET_NAME
+from ..config import MODEL_ID, SAE_ID, S3_BUCKET_NAME
 
 def download_explanations_from_s3(model_id: str, sae_id: str, output_path: str):
     """

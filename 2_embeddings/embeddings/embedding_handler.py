@@ -13,7 +13,7 @@ from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
 
-from config import AUTOINTERP_MODELS, AUTOINTERP_TYPE, EMBEDDING_MODEL
+from ..config import AUTOINTERP_MODELS, AUTOINTERP_TYPE, EMBEDDING_MODEL
 
 # ==============================================================================
 # 1. STRATEGY PATTERN: DEFINE EMBEDDER INTERFACE AND IMPLEMENTATIONS
@@ -99,6 +99,13 @@ class SentenceTransformersEmbedder(BaseEmbedder):
     """
     def load_model(self):
         print(f"Loading SentenceTransformer model: {self.model_name}")
+        
+        # Determine device if not already specified in kwargs
+        if "device" not in self.init_kwargs and "device_map" not in self.init_kwargs.get("model_kwargs", {}):
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.init_kwargs["device"] = device
+            print(f"Automatically selected device: {device}")
+
         self.model = SentenceTransformer(self.model_name, **self.init_kwargs)
         print("SentenceTransformer model loaded successfully.")
 

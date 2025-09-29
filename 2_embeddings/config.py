@@ -2,14 +2,6 @@
 Configuration file for the Neuronpedia explanation downloader script.
 """
 import os
-import dotenv
-
-# Load environment variables from a .env file if it exists.
-dotenv.load_dotenv()
-
-# --- API Configuration ---
-# Your personal API key for Neuronpedia. Set this in your .env file.
-NEURONPEDIA_API_KEY = os.getenv("NEURONPEDIA_KEY")
 
 # --- Model & SAE Identifiers ---
 # These are used to specify which explanations to download via the API.
