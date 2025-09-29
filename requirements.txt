@@ -1,7 +1,8 @@
-datasets==4.1.1
-huggingface_hub==0.35.2
-numpy==2.3.3
-safetensors==0.6.2
-tqdm==4.67.1
-transformer_lens==2.16.1
-transformers==4.56.2
+datasets
+huggingface_hub
+numpy
+safetensors
+tqdm
+transformer_lens
+transformers
+zstandard
