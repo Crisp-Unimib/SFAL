@@ -28,17 +28,16 @@ MODELS = {
         "base_dir": "Llama3_1-8B-Base-LXR-8x",
         "layers": [0, 8, 17, 25, 31],
         "layer_dir_pattern": "{layer}-llamascope-res-32k",
-        "npz_filename": "pajama_meta-llama_Llama-3.1-8B_res_Llama3_1-8B-Base-L{layer}R-8x_checkpoints_final.safetensors_docs100k_keq512_cooccurrences.npz",
-        "n_total_chunks": 44775,
+        "npz_filename": "pajama_meta-llama_Llama-3.1-8B_res_Llama3_1-8B-Base-L{layer}R-8x_checkpoints_final.safetensors_docs50k_keq256_cooccurrences_topk.npz",
+        "n_total_chunks": 71687,
     },
-    # "gemma": {
-    #     "base_dir": "gemmascope-res-16k",
-    #     "layers": [0, 8, 17, 25, 41],
-    #     "layer_dir_pattern": "{layer}-gemmascope-res-16k",
-    #     # Qui serve una funzione lambda per il nome del file:
-    #     "npz_filename": lambda layer: f"pile_google_gemma-2-9b_res_layer_{layer}_width_16k_average_l0_129_docs50k_keq256_cooccurrences.npz",
-    #     "n_total_chunks": 70248,
-    # }
+    "gemma": {
+        "base_dir": "gemmascope-res-16k",
+        "layers": [0, 8, 17, 25, 41],
+        "layer_dir_pattern": "{layer}-gemmascope-res-16k",
+        "npz_filename": lambda layer: f"pile_google_gemma-2-9b_res_layer_{layer}_width_16k_average_l0_129_docs50k_keq256_cooccurrences.npz",
+        "n_total_chunks": 70248,
+    }
 }
 TOP_N = 1023
 EMBEDDING_COL = "embedding"
@@ -207,3 +206,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
