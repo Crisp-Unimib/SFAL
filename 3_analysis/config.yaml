@@ -1,0 +1,34 @@
+# config.yaml
+
+# --- GENERAL SETTINGS ---
+general:
+  seed: 28
+  top_n: 1023
+  device: "cpu"  # Il dispositivo viene gestito come stringa
+
+# --- COLUMNS NAME ---
+columns:
+  embedding: "embedding"
+  layer: "layer"
+
+# --- PATH ---
+# Ensure that this path points to your folder 'data'
+paths:
+  base_data_dir: "/home/mmezzanzanica/project/scoring_autoint_align/data"
+
+# --- MODELS CONFIG ---
+models:
+  llama:
+    base_dir: "Llama3_1-8B-Base-LXR-8x"
+    layers: [0, 8, 17, 25, 31]
+    layer_dir_pattern: "{layer}-llamascope-res-32k"
+    npz_filename_pattern: "pajama_meta-llama_Llama-3.1-8B_res_Llama3_1-8B-Base-L{layer}R-8x_checkpoints_final.safetensors_docs50k_keq256_cooccurrences_topk.npz"
+    n_total_chunks: 71687
+    vocab_size: 32768
+  gemma:
+    base_dir: "gemmascope-res-16k"
+    layers: [0, 8, 17, 25, 41]
+    layer_dir_pattern: "{layer}-gemmascope-res-16k"
+    npz_filename_pattern: null 
+    n_total_chunks: 70248
+    vocab_size: 16384

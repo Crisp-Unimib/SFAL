@@ -1,49 +1,65 @@
-import os
+# production version of scoring script
+
+import os 
 import time
 import random
+import argparse
 from pathlib import Path
 from typing import List, Dict
 
+import yaml  
 import numpy as np
 import pandas as pd
 import torch
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm.auto import tqdm
 
-SEED = 28
-random.seed(SEED)
-np.random.seed(SEED)
-torch.manual_seed(SEED)
-torch.cuda.manual_seed_all(SEED)
-os.environ["PYTHONHASHSEED"] = str(SEED)
-os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-torch.use_deterministic_algorithms(True)
 
-DEVICE = torch.device("cpu")
+def load_config(path: str = "config.yaml") -> Dict:
+    """Carica il file di configurazione YAML."""
+    try:
+        with open(path, 'r') as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        print(f"Errore: File di configurazione '{path}' non trovato.")
+        print("Assicurati che il file config.yaml sia nella stessa cartella dello script.")
+        exit(1)
+    except yaml.YAMLError as e:
+        print(f"Errore durante la lettura del file YAML: {e}")
+        exit(1)
 
-BASE_DATA_DIR = "/home/mmezzanzanica/project/scoring_autoint_align/data"
+# GLobal setup #
+CONFIG = load_config()
 
-MODELS = {
-    "llama": {
-        "base_dir": "Llama3_1-8B-Base-LXR-8x",
-        "layers": [0, 8, 17, 25, 31],
-        "layer_dir_pattern": "{layer}-llamascope-res-32k",
-        "npz_filename": "pajama_meta-llama_Llama-3.1-8B_res_Llama3_1-8B-Base-L{layer}R-8x_checkpoints_final.safetensors_docs50k_keq256_cooccurrences_topk.npz",
-        "n_total_chunks": 71687,
-    },
-    "gemma": {
-        "base_dir": "gemmascope-res-16k",
-        "layers": [0, 8, 17, 25, 41],
-        "layer_dir_pattern": "{layer}-gemmascope-res-16k",
-        "npz_filename": lambda layer: f"pile_google_gemma-2-9b_res_layer_{layer}_width_16k_average_l0_129_docs50k_keq256_cooccurrences.npz",
-        "n_total_chunks": 70248,
-    }
-}
-TOP_N = 1023
-EMBEDDING_COL = "embedding"
-LAYER_COL = "layer"
+DEVICE = CONFIG['general']['device'].lower()
 
+if DEVICE == "cuda": 
+    if torch.cuda.is_available():
+        DEVICE = "cuda"
+    else:
+        print("CPU Inference")
+        DEVICE = "cpu"
+
+else: 
+    DEVICE = "cpu"
+
+print(f"Using device: {DEVICE}")
+
+def setup_environment():
+    """Imposta i seed per la riproducibilità leggendoli dalla config."""
+    seed = CONFIG['general']['seed']
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    torch.use_deterministic_algorithms(True)
+
+# --- FUNZIONI DI CALCOLO ---
 def calculate_phi_matrix(cooc_mat_np: np.ndarray, n_total: int) -> torch.Tensor:
+    """Calcola la matrice Phi (coefficiente di correlazione di Matthews)."""
     n = cooc_mat_np.shape[0]
     cooc = torch.from_numpy(cooc_mat_np.astype(np.float32)).to(DEVICE)
     N = torch.tensor(float(n_total), device=DEVICE)
@@ -69,141 +85,181 @@ def calculate_phi_matrix(cooc_mat_np: np.ndarray, n_total: int) -> torch.Tensor:
     torch.diagonal(phi).fill_(-torch.inf)
     return phi
 
+# --- FUNZIONI DI GESTIONE FILE ---
 def find_embedding_pkls(layer_dir: Path) -> Dict[str, Path]:
-    """
-    Cerca ricorsivamente tutti i file oai_token-act-pair_gpt-4o-mini_embeddings.pkl nella directory di layer.
-    Restituisce dict: {nome_embedding: path_pickle}
-    """
+    """Cerca ricorsivamente i file .pkl degli embedding."""
     emb_pkls = {}
     for pkl_path in layer_dir.rglob("oai_token-act-pair_gpt-4o-mini_embeddings.pkl"):
-        # emb_model = path relativa alla layer_dir, es: "Alibaba-NLP/gte-Qwen2-7B-instruct"
         rel_emb = pkl_path.parent.relative_to(layer_dir)
-        emb_name = str(rel_emb)  # per chiarezza: Alibaba-NLP/gte-Qwen2-7B-instruct oppure Qwen/Qwen3-Embedding-8B
+        emb_name = str(rel_emb)
         emb_pkls[emb_name] = pkl_path
     return emb_pkls
 
-def process_layer(model_key, layer, model_conf):
-    print(f"\n=== {model_key.upper()} Layer {layer} ===")
-    layer_dir = Path(BASE_DATA_DIR) / model_conf["base_dir"] / model_conf["layer_dir_pattern"].format(layer=layer)
-    emb_models = find_embedding_pkls(layer_dir)
-    if not emb_models:
-        print(f"Nessun embedding trovato in {layer_dir}")
-        return None
-
-    # --- PATCH: logica di ricerca cooc per gemma ---
+def find_cooc_file(model_key: str, layer: int, layer_dir: Path, model_conf: Dict) -> Path:
+    """Trova il file di co-occorrenza (.npz) corretto."""
     if model_key == "gemma":
-        npz_path = None
         for f in layer_dir.glob("*cooccurrences.npz"):
             if f"layer_{layer}_" in f.name:
-                npz_path = f
-                break
-        if npz_path is None:
-            print(f"Cooc file non trovato in {layer_dir} per layer {layer}")
-            return None
+                return f
+        return None
     else:
-        npz_name = model_conf["npz_filename"].format(layer=layer)
+        npz_name = model_conf["npz_filename_pattern"].format(layer=layer)
         npz_path = layer_dir / npz_name
-        if not npz_path.exists():
-            print(f"Cooc file non trovato: {npz_path}")
-            return None
+        return npz_path if npz_path.exists() else None
 
-    # Carica cooccorrenze
+
+def process_layer(model_key: str, layer: int, model_conf: Dict, selected_embeddings: List[str]):
+    print(f"\n=== Elaborazione: {model_key.upper()} Layer {layer} ===")
+    base_data_dir = CONFIG['paths']['base_data_dir']
+    layer_dir = Path(base_data_dir) / model_conf["base_dir"] / model_conf["layer_dir_pattern"].format(layer=layer)
+
+    available_embs = find_embedding_pkls(layer_dir)
+    if not available_embs:
+        print(f"Attenzione: Nessun file embedding .pkl trovato in {layer_dir}. Salto layer.")
+        return None
+
+    embeddings_to_process = {name: path for name, path in available_embs.items() if name in selected_embeddings}
+    if not embeddings_to_process:
+        print(f"Attenzione: Nessuno degli embedding selezionati {selected_embeddings} è stato trovato per il layer {layer}. Salto layer.")
+        return None
+
+    npz_path = find_cooc_file(model_key, layer, layer_dir, model_conf)
+    if not npz_path:
+        print(f"Attenzione: File di co-occorrenza non trovato per il layer {layer}. Salto layer.")
+        return None
+
     with np.load(npz_path) as npzf:
         cooc = npzf["histogram"]
     phi = calculate_phi_matrix(cooc, model_conf["n_total_chunks"])
 
-    # Prepara struttura aggregata
     results_df = None
-    # Per ogni modello di embedding
-    for emb_name, pkl_path in emb_models.items():
-        print('#'*20)
-        print("per il modello:", model_key, "layer:", layer, "sto usando cooc file:", npz_path, "e embedding file:" , pkl_path)
-        print('#'*20)
-        print(f"-> Calcolo NDCG con embedding: {emb_name}")
+    embedding_col = CONFIG['columns']['embedding']
+    layer_col = CONFIG['columns']['layer']
+    top_n = CONFIG['general']['top_n']
+
+    for emb_name, pkl_path in embeddings_to_process.items():
+        print(f"-> Calcolo NDCG per l'embedding: {emb_name}")
         df = pd.read_pickle(pkl_path)
         df = df.sort_values('index').reset_index(drop=True)
-        embedding_dim = len(df.loc[df['embedding'].notna(), 'embedding'].iloc[0])
 
-        existing_indexes = set(df['index'])
-        if model_key == "llama":
-            full_index_range = set(range(0, 32768))
-        elif model_key == "gemma":
-            full_index_range = set(range(0, 16384))
-        missing_indexes = sorted(full_index_range - existing_indexes)
-        filler_rows = []
-        for idx in missing_indexes:
-            filler_rows.append({
-                'id': np.nan, 'modelId': np.nan, 'layer': np.nan, 'index': idx, 'authorId': np.nan,
-                'description': np.nan, 'embedding': [0.0] * embedding_dim, 'typeName': np.nan,
-                'explanationModelName': np.nan, 'umap_x': np.nan, 'umap_y': np.nan,
-                'umap_cluster': np.nan, 'umap_log_feature_sparsity': np.nan, 'true_description': np.nan
-            })
-        df_fillers = pd.DataFrame(filler_rows)
-        df_filled = pd.concat([df, df_fillers], ignore_index=True)
-        df = df_filled.sort_values('index').reset_index(drop=True)
+        embedding_dim = len(df.loc[df[embedding_col].notna(), embedding_col].iloc[0])
+        full_index_range = set(range(model_conf["vocab_size"]))
+        missing_indexes = sorted(full_index_range - set(df['index']))
 
-        embs = np.stack(df[EMBEDDING_COL].values).astype(np.float32)
+        if missing_indexes:
+            filler_rows = [{'index': idx, embedding_col: [0.0] * embedding_dim} for idx in missing_indexes]
+            df_fillers = pd.DataFrame(filler_rows)
+            df = pd.concat([df, df_fillers], ignore_index=True).sort_values('index').reset_index(drop=True)
+
+        embs = np.stack(df[embedding_col].values).astype(np.float32)
         sem = cosine_similarity(embs)
         np.fill_diagonal(sem, -np.inf)
 
         n = len(df)
-        top_sem = np.argsort(-sem, axis=1)[:, :TOP_N]
-        top_phi = torch.argsort(phi, dim=1, descending=True)[:,:TOP_N].cpu().numpy()
-        idxs = df.index.to_numpy()
-        log2 = np.log2(np.arange(2, TOP_N+2))
+        top_sem = np.argsort(-sem, axis=1)[:, :top_n]
+        top_phi = torch.argsort(phi, dim=1, descending=True)[:, :top_n].cpu().numpy()
+
+        log2 = np.log2(np.arange(2, top_n + 2))
         scores = {}
-        for i in tqdm(range(n), desc=f"NDCG L{layer} [{emb_name}]"):
-            sem_i = top_sem[i][top_sem[i] < len(idxs)]
-            phi_i = top_phi[i][top_phi[i] < len(idxs)]
-            sem_nb = idxs[sem_i]
-            phi_nb = idxs[phi_i]
-            rel = {idj: 1.1**(TOP_N-rk)-1 for rk, idj in enumerate(sem_nb)}
-            dcg  = sum(rel.get(j, 0) / log2[rk] for rk, j in enumerate(phi_nb))
-            idcg = sum(rel[j]        / log2[rk] for rk, j in enumerate(sem_nb))
-            scores[idxs[i]] = dcg / idcg if idcg else 0.0
+        for i in tqdm(range(n), desc=f"NDCG L{layer} [{emb_name}]", leave=False):
+            sem_nb = top_sem[i]
+            phi_nb = top_phi[i]
+            rel = {idj: 1.1**(top_n - rk) - 1 for rk, idj in enumerate(sem_nb)}
+            dcg = sum(rel.get(j, 0) / log2[rk] for rk, j in enumerate(phi_nb))
+            idcg = sum(rel.get(j, 0) / log2[rk] for rk, j in enumerate(sem_nb))
+            scores[i] = dcg / idcg if idcg else 0.0
 
         df[f"ndcg_{emb_name}"] = df.index.map(scores)
-        df[LAYER_COL] = layer
+        df[layer_col] = layer
 
-        keep_cols = ["index", "description", LAYER_COL, f"ndcg_{emb_name}"] #rimosso 'id', se crea problemi cura in altro modo
+        keep_cols = ["index", "description", layer_col, f"ndcg_{emb_name}"]
         if results_df is None:
             results_df = df[keep_cols]
         else:
-            results_df = results_df.merge(
-                df[["index", f"ndcg_{emb_name}"]],
-                on="index",
-                how="left"
-            )
+            results_df = results_df.merge(df[["index", f"ndcg_{emb_name}"]], on="index", how="left")
+
     return results_df
 
+def get_cli_args():
+    parser = argparse.ArgumentParser(description="NDCG Scoring")
+    parser.add_argument(
+        "--model",
+        type=str,
+        required=True,
+        choices=CONFIG['models'].keys(),
+        help="SAE."
+    )
+    parser.add_argument(
+        "--layers",
+        type=int,
+        nargs='+',
+        required=True,
+        help="Layer to be processed (es. --layers 0 8)."
+    )
+    parser.add_argument(
+        "--embeddings",
+        type=str,
+        nargs='+',
+        required=True,
+        help="Embedding model to be used (es. --embeddings 'Qwen/Qwen3-Embedding-8B')."
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="scoring_results.csv",
+        help="Output CSV file path (default: scoring_results.csv)."
+    )
+    return parser.parse_args()
+# --- MAIN ---
 def main():
+    
     print("""
 
- _   _  ___________ _____   _    _ _____   _____ _____ 
-| | | ||  ___| ___ \  ___| | |  | |  ___| |  __ \  _  |
-| |_| || |__ | |_/ / |__   | |  | | |__   | |  \/ | | |
-|  _  ||  __||    /|  __|  | |/\| |  __|  | | __| | | |
-| | | || |___| |\ \| |___  \  /\  / |___  | |_\ \ \_/ /
-\_| |_/\____/\_| \_\____/   \/  \/\____/   \____/\___/           
+ _____ _____ ___________ _____ _   _ _____  
+/  ___/  __ \  _  | ___ \_   _| \ | |  __ \ 
+\ `--.| /  \/ | | | |_/ / | | |  \| | |  \/ 
+ `--. \ |   | | | |    /  | | | . ` | | __  
+/\__/ / \__/\ \_/ / |\ \ _| |_| |\  | |_\ \ 
+\____/ \____/\___/\_| \_|\___/\_| \_/\____/ 
+                                            
+                                            
 
-          """)
+""")
     t0 = time.time()
-    for model_key, model_conf in MODELS.items():
-        print(f"\n### PROCESSO MODELLO: {model_key.upper()} ###")
-        all_layers_df = []
-        for layer in model_conf["layers"]:
-            layer_df = process_layer(model_key, layer, model_conf)
-            if layer_df is not None:
-                all_layers_df.append(layer_df)
-        if all_layers_df:
-            final_df = pd.concat(all_layers_df, ignore_index=True)
-            output_csv = f"NO_rerank_ndcg_all_layers_{model_key}.csv"
-            final_df.to_csv(output_csv, index=False)
-            print(f"➡️  Salvato {output_csv}")
-        else:
-            print(f"Nessun dato prodotto per {model_key}")
-    print(f"\n🏁 Completato in {time.time()-t0:.1f}s")
+    setup_environment()
+    args = get_cli_args()
+
+    model_key = args.model
+    model_conf = CONFIG['models'][model_key]
+
+   
+    for layer in args.layers:
+        if layer not in model_conf["layers"]:
+            print(f"\nErrore: The layer {layer} is not valid for the model {model_key}.")
+            print(f"Available Layers: {model_conf['layers']}")
+            return
+
+    print(f"\n### Selected Configuration ###")
+    print(f"Model: {model_key.upper()}")
+    print(f"Layer: {args.layers}")
+    print(f"Embeddings: {args.embeddings}")
+    print("#################################\n")
+
+    all_layers_df = []
+    for layer in sorted(args.layers):
+        layer_df = process_layer(model_key, layer, model_conf, args.embeddings)
+        if layer_df is not None:
+            all_layers_df.append(layer_df)
+
+    if all_layers_df:
+        final_df = pd.concat(all_layers_df, ignore_index=True)
+        final_df.to_csv(args.output, index=False)
+        print(f"\n➡️  Risults saved: {args.output}")
+    else:
+        print("\nSomething went wrong. Please check the selected configuration.")
+
+    print(f"\n🏁 Execution completed in {time.time()-t0:.1f} seconds.")
+
 
 if __name__ == "__main__":
     main()
-    
