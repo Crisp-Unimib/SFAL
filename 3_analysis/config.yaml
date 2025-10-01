@@ -4,7 +4,7 @@
 general:
   seed: 28
   top_n: 1023
-  device: "cpu"  # Il dispositivo viene gestito come stringa
+  device: "cpu"  
 
 # --- COLUMNS NAME ---
 columns:
@@ -14,7 +14,7 @@ columns:
 # --- PATH ---
 # Ensure that this path points to your folder 'data'
 paths:
-  base_data_dir: "/home/mmezzanzanica/project/scoring_autoint_align/data"
+  base_data_dir: "data"
 
 # --- MODELS CONFIG ---
 models:

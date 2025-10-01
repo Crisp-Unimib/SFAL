@@ -1,13 +1,13 @@
-# production version of scoring script
 
-import os 
+
+import os
 import time
 import random
 import argparse
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 
-import yaml  
+import yaml
 import numpy as np
 import pandas as pd
 import torch
@@ -16,37 +16,44 @@ from tqdm.auto import tqdm
 
 
 def load_config(path: str = "config.yaml") -> Dict:
-    """Carica il file di configurazione YAML."""
+    """
+    Loads the YAML configuration file.
+
+    Args:
+        path: The path to the configuration file.
+
+    Returns:
+        A dictionary with the configuration.
+    """
     try:
         with open(path, 'r') as f:
             return yaml.safe_load(f)
     except FileNotFoundError:
-        print(f"Errore: File di configurazione '{path}' non trovato.")
-        print("Assicurati che il file config.yaml sia nella stessa cartella dello script.")
+        print(f"Error: Configuration file '{path}' not found.")
+        print("Ensure that the config.yaml file is in the same folder as the script.")
         exit(1)
     except yaml.YAMLError as e:
-        print(f"Errore durante la lettura del file YAML: {e}")
+        print(f"Error reading the YAML file: {e}")
         exit(1)
 
-# GLobal setup #
+# Global setup
 CONFIG = load_config()
 
 DEVICE = CONFIG['general']['device'].lower()
 
-if DEVICE == "cuda": 
+if DEVICE == "cuda":
     if torch.cuda.is_available():
         DEVICE = "cuda"
     else:
-        print("CPU Inference")
+        print("CUDA not available, falling back to CPU.")
         DEVICE = "cpu"
-
-else: 
+else:
     DEVICE = "cpu"
 
 print(f"Using device: {DEVICE}")
 
 def setup_environment():
-    """Imposta i seed per la riproducibilità leggendoli dalla config."""
+    """Sets the seeds for reproducibility from the config file."""
     seed = CONFIG['general']['seed']
     random.seed(seed)
     np.random.seed(seed)
@@ -57,9 +64,9 @@ def setup_environment():
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     torch.use_deterministic_algorithms(True)
 
-# --- FUNZIONI DI CALCOLO ---
+# --- CALCULATION FUNCTIONS ---
 def calculate_phi_matrix(cooc_mat_np: np.ndarray, n_total: int) -> torch.Tensor:
-    """Calcola la matrice Phi (coefficiente di correlazione di Matthews)."""
+    """Calculates the Phi matrix (Matthews correlation coefficient)."""
     n = cooc_mat_np.shape[0]
     cooc = torch.from_numpy(cooc_mat_np.astype(np.float32)).to(DEVICE)
     N = torch.tensor(float(n_total), device=DEVICE)
@@ -85,9 +92,9 @@ def calculate_phi_matrix(cooc_mat_np: np.ndarray, n_total: int) -> torch.Tensor:
     torch.diagonal(phi).fill_(-torch.inf)
     return phi
 
-# --- FUNZIONI DI GESTIONE FILE ---
+# --- FILE MANAGEMENT FUNCTIONS ---
 def find_embedding_pkls(layer_dir: Path) -> Dict[str, Path]:
-    """Cerca ricorsivamente i file .pkl degli embedding."""
+    """Recursively finds all embedding .pkl files in a directory."""
     emb_pkls = {}
     for pkl_path in layer_dir.rglob("oai_token-act-pair_gpt-4o-mini_embeddings.pkl"):
         rel_emb = pkl_path.parent.relative_to(layer_dir)
@@ -95,8 +102,8 @@ def find_embedding_pkls(layer_dir: Path) -> Dict[str, Path]:
         emb_pkls[emb_name] = pkl_path
     return emb_pkls
 
-def find_cooc_file(model_key: str, layer: int, layer_dir: Path, model_conf: Dict) -> Path:
-    """Trova il file di co-occorrenza (.npz) corretto."""
+def find_cooc_file(model_key: str, layer: int, layer_dir: Path, model_conf: Dict) -> Optional[Path]:
+    """Finds the correct co-occurrence (.npz) file for a given model and layer."""
     if model_key == "gemma":
         for f in layer_dir.glob("*cooccurrences.npz"):
             if f"layer_{layer}_" in f.name:
@@ -108,24 +115,39 @@ def find_cooc_file(model_key: str, layer: int, layer_dir: Path, model_conf: Dict
         return npz_path if npz_path.exists() else None
 
 
-def process_layer(model_key: str, layer: int, model_conf: Dict, selected_embeddings: List[str]):
-    print(f"\n=== Elaborazione: {model_key.upper()} Layer {layer} ===")
+def process_layer(model_key: str, layer: int, model_conf: Dict, selected_embeddings: List[str]) -> Optional[pd.DataFrame]:
+    """
+    Processes a single model layer to calculate NDCG scores.
+
+    This function finds the required embedding and co-occurrence files, calculates
+    the Phi matrix, computes NDCG scores, and returns the results as a DataFrame.
+
+    Args:
+        model_key: The key for the model being processed (e.g., 'llama').
+        layer: The layer number to process.
+        model_conf: The configuration dictionary for the model.
+        selected_embeddings: A list of embedding names to process.
+
+    Returns:
+        A DataFrame with the NDCG scores for the layer, or None if processing fails.
+    """
+    print(f"\n=== Processing: {model_key.upper()} Layer {layer} ===")
     base_data_dir = CONFIG['paths']['base_data_dir']
     layer_dir = Path(base_data_dir) / model_conf["base_dir"] / model_conf["layer_dir_pattern"].format(layer=layer)
 
     available_embs = find_embedding_pkls(layer_dir)
     if not available_embs:
-        print(f"Attenzione: Nessun file embedding .pkl trovato in {layer_dir}. Salto layer.")
+        print(f"Warning: No embedding .pkl files found in {layer_dir}. Skipping layer.")
         return None
 
     embeddings_to_process = {name: path for name, path in available_embs.items() if name in selected_embeddings}
     if not embeddings_to_process:
-        print(f"Attenzione: Nessuno degli embedding selezionati {selected_embeddings} è stato trovato per il layer {layer}. Salto layer.")
+        print(f"Warning: None of the selected embeddings {selected_embeddings} were found for layer {layer}. Skipping layer.")
         return None
 
     npz_path = find_cooc_file(model_key, layer, layer_dir, model_conf)
     if not npz_path:
-        print(f"Attenzione: File di co-occorrenza non trovato per il layer {layer}. Salto layer.")
+        print(f"Warning: Co-occurrence file not found for layer {layer}. Skipping layer.")
         return None
 
     with np.load(npz_path) as npzf:
@@ -138,7 +160,7 @@ def process_layer(model_key: str, layer: int, model_conf: Dict, selected_embeddi
     top_n = CONFIG['general']['top_n']
 
     for emb_name, pkl_path in embeddings_to_process.items():
-        print(f"-> Calcolo NDCG per l'embedding: {emb_name}")
+        print(f"-> Calculating NDCG for embedding: {emb_name}")
         df = pd.read_pickle(pkl_path)
         df = df.sort_values('index').reset_index(drop=True)
 
@@ -181,27 +203,28 @@ def process_layer(model_key: str, layer: int, model_conf: Dict, selected_embeddi
     return results_df
 
 def get_cli_args():
-    parser = argparse.ArgumentParser(description="NDCG Scoring")
+    """Parses command-line arguments."""
+    parser = argparse.ArgumentParser(description="NDCG Scoring Script for SAE Models")
     parser.add_argument(
         "--model",
         type=str,
         required=True,
         choices=CONFIG['models'].keys(),
-        help="SAE."
+        help="The SAE model to use."
     )
     parser.add_argument(
         "--layers",
         type=int,
         nargs='+',
         required=True,
-        help="Layer to be processed (es. --layers 0 8)."
+        help="Layers to be processed (e.g., --layers 0 8)."
     )
     parser.add_argument(
         "--embeddings",
         type=str,
         nargs='+',
         required=True,
-        help="Embedding model to be used (es. --embeddings 'Qwen/Qwen3-Embedding-8B')."
+        help="Embedding models to be used (e.g., --embeddings 'Qwen/Qwen2-7B-Instruct')."
     )
     parser.add_argument(
         "--output",
@@ -210,9 +233,10 @@ def get_cli_args():
         help="Output CSV file path (default: scoring_results.csv)."
     )
     return parser.parse_args()
+
 # --- MAIN ---
 def main():
-    
+    """Main function to run the scoring process."""
     print("""
 
  _____ _____ ___________ _____ _   _ _____  
@@ -232,16 +256,16 @@ def main():
     model_key = args.model
     model_conf = CONFIG['models'][model_key]
 
-   
+    # Validate selected layers
     for layer in args.layers:
         if layer not in model_conf["layers"]:
-            print(f"\nErrore: The layer {layer} is not valid for the model {model_key}.")
+            print(f"\nError: Layer {layer} is not valid for model {model_key}.")
             print(f"Available Layers: {model_conf['layers']}")
             return
 
     print(f"\n### Selected Configuration ###")
     print(f"Model: {model_key.upper()}")
-    print(f"Layer: {args.layers}")
+    print(f"Layers: {args.layers}")
     print(f"Embeddings: {args.embeddings}")
     print("#################################\n")
 
@@ -254,9 +278,9 @@ def main():
     if all_layers_df:
         final_df = pd.concat(all_layers_df, ignore_index=True)
         final_df.to_csv(args.output, index=False)
-        print(f"\n➡️  Risults saved: {args.output}")
+        print(f"\n➡️  Results saved to: {args.output}")
     else:
-        print("\nSomething went wrong. Please check the selected configuration.")
+        print("\nNo results were generated. Please check the configuration and file paths.")
 
     print(f"\n🏁 Execution completed in {time.time()-t0:.1f} seconds.")
 
