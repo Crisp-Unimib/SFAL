@@ -1,6 +1,6 @@
 # 3. Analysis and Scoring
 
-This directory contains the script for analyzing and scoring the results. The main script, `scoring.py`, calculates the Normalized Discounted Cumulative Gain (NDCG) to evaluate the performance of Sparse Autoencoder (SAE) models. It compares the similarity of SAE features based on their co-occurrence patterns (Phi matrix) with the similarity of their embeddings from a separate model.
+This directory contains the script for scoring the auto-interpretation. The main script, `scoring.py`, calculates the Normalized Discounted Cumulative Gain (NDCG) to evaluate the performance of Sparse Autoencoder (SAE) models. It compares the similarity of SAE features based on their co-occurrence patterns (Phi matrix) with the similarity of their embeddings from a separate model.
 
 ## Configuration (`config.yaml`)
 
