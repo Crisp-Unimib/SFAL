@@ -1,6 +1,6 @@
 # SFAL: Semantic–Functional Alignment Scores
 
-This repository contains a pipeline for analyzing and linking features from Sparse Autoencoders (SAEs). The process involves calculating the co-occurrence of SAE features, generating embeddings for their explanations, and scoring the alignment between co-occurrence patterns and semantic similarity.
+This repository contains a pipeline for analyzing and linking features from Sparse Autoencoders. The process involves calculating the co-occurrence of SAE features, generating embeddings for their explanations, and scoring the alignment between co-occurrence patterns and semantic similarity.
 
 ## Repository Structure
 
