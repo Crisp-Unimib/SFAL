@@ -6,7 +6,10 @@ This directory contains the script for scoring the auto-interpretation. The main
 
 Before running the script, it is necessary to **download the required data** from the following Google Drive folder:
 
-👉 [Download Data](https://drive.google.com/drive/folders/1uhg73Ecrmt0mCsXPYaZ0YejyHGbWW36Z?usp=drive_link)
+👉 [Download Data](https://drive.google.com/drive/folders/16s3BjXNA55GqeX3mdDgxp0WMes_zJ1M3?usp=drive_link)
+
+In the folder, you will find a ‘results’ folder containing the results of the scores obtained from our experimentation on the SAEs considered, for each layer considered and on all the embedding models tested.
+You will also find the ‘data’ folder containing the data needed to replicate the experiment.
 
 After downloading, ensure that the **path specified in `config.yaml`** points to the correct location of the downloaded data on your system. Otherwise, the script will not be able to access the files.
 
