@@ -191,14 +191,14 @@ def process_layer(model_key: str, layer: int, model_conf: Dict, selected_embeddi
             idcg = sum(rel.get(j, 0) / log2[rk] for rk, j in enumerate(sem_nb))
             scores[i] = dcg / idcg if idcg else 0.0
 
-        df[f"ndcg_{emb_name}"] = df.index.map(scores)
+        df[f"SFAL_{emb_name}"] = df.index.map(scores)
         df[layer_col] = layer
 
-        keep_cols = ["index", "description", layer_col, f"ndcg_{emb_name}"]
+        keep_cols = ["index", "description", layer_col, f"SFAL_{emb_name}"]
         if results_df is None:
             results_df = df[keep_cols]
         else:
-            results_df = results_df.merge(df[["index", f"ndcg_{emb_name}"]], on="index", how="left")
+            results_df = results_df.merge(df[["index", f"SFAL_{emb_name}"]], on="index", how="left")
 
     return results_df
 
